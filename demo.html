@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" class="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vigilance.ai - Autonomous AI SOC Analyst Assistant (Demo)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#020617', // slate-950
+            panel: '#0f172a',      // slate-900
+            panelBorder: '#1e293b', // slate-800
+            cyberCrimson: '#ef4444', // Red
+            cyberAmber: '#f59e0b',   // Amber
+            cyberCyan: '#06b6d4',    // Cyan
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Alpine.js CDN for reactivity -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* Scrollbar customization matching flat security display */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #020617;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Terminal blinking cursor */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .blinking-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 15px;
+      background-color: #06b6d4;
+      margin-left: 4px;
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+    }
+
+    /* Console CRT Scanline overlay */
+    .scanlines {
+      position: relative;
+      overflow: hidden;
+    }
+    .scanlines::before {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.04));
+      z-index: 10;
+      background-size: 100% 2px, 3px 100%;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body x-data="socDashboard()" class="h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+
+  <!-- Header Bar -->
+  <header class="h-12 border-b border-slate-800 bg-slate-950 flex items-center justify-between px-4 z-20 shrink-0">
+    <div class="flex items-center space-x-3">
+      <!-- Shield Logo -->
+      <div class="bg-cyan-500/10 border border-cyan-500/30 p-1.5 rounded-sm">
+        <svg class="h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <span class="font-semibold tracking-wider text-sm text-slate-100 font-mono">VIGILANCE.AI</span>
+        <span class="text-[10px] text-slate-400 font-mono ml-2 border-l border-slate-700 pl-2">AUTONOMOUS SOC ENGINE</span>
+      </div>
+    </div>
+    
+    <div class="flex items-center space-x-6 text-[11px] font-mono text-slate-400">
+      <div class="flex items-center space-x-2">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span>AGENT STATUS: ACTIVE</span>
+      </div>
+      <div>MODE: <span class="text-slate-200">INTERACTIVE DEMO</span></div>
+      <div>VER: <span class="text-slate-200">1.0.0-PRO</span></div>
+    </div>
+  </header>
+
+  <!-- Split Pane Layout -->
+  <main class="flex-1 flex h-[calc(100vh-3rem)] overflow-hidden w-full relative">
+    
+    <!-- Left Pane: Active Threat Feed -->
+    <section class="w-[38%] border-r border-slate-800 bg-slate-950/60 flex flex-col overflow-hidden shrink-0">
+      <div class="p-3 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <svg class="h-4 w-4 text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <h2 class="text-xs font-semibold tracking-wider uppercase text-slate-200 font-mono">Active Threat Feed</h2>
+        </div>
+        <span class="text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded-sm uppercase">Live Data Stream</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 text-[10px] uppercase font-mono text-slate-500 bg-slate-950">
+              <th class="py-2 px-3">Time</th>
+              <th className="py-2 px-3">Alert ID</th>
+              <th class="py-2 px-3">Source IP</th>
+              <th class="py-2 px-3">Alert Type</th>
+              <th class="py-2 px-3 text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/40 text-xs font-mono">
+            <template x-for="(alert, idx) in alerts" :key="alert.id">
+              <tr 
+                @click="selectAlert(alert)"
+                :class="selectedAlert.id === alert.id ? 'bg-slate-900/90 text-cyan-400 border-l-2 border-cyan-500' : 'hover:bg-slate-900/30 text-slate-300'"
+                class="cursor-pointer transition-all duration-150 relative"
+              >
+                <td class="py-3 px-3 text-slate-500 text-[11px]" x-text="alert.time"></td>
+                <td class="py-3 px-3 font-semibold" x-text="alert.id"></td>
+                <td class="py-3 px-3 tracking-tight font-mono" x-text="alert.srcIp"></td>
+                <td class="py-3 px-3 text-slate-100" x-text="alert.alertType"></td>
+                <td class="py-3 px-3 text-right">
+                  <span 
+                    :class="alert.severity === 'critical' ? 'bg-red-950/40 border-red-500/30 text-red-400' : alert.severity === 'high' ? 'bg-amber-950/40 border-amber-500/30 text-amber-400' : 'bg-cyan-950/40 border-cyan-500/30 text-cyan-400'"
+                    class="inline-block text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm border"
+                    x-text="alert.severity"
+                  ></span>
+                </td>
+                
+                <!-- Globe indicator inside the first log container -->
+                <div x-show="idx === 0" class="absolute right-2 top-2 pointer-events-none opacity-[0.08] text-cyan-400 animate-spin" style="animation-duration: 40s;">
+                  <svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                </div>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Right Pane: Workbench & Investigation Console -->
+    <section class="flex-1 flex flex-col overflow-hidden bg-slate-950">
+      
+      <!-- Top Split Panel: Workbench (Data Visualizations) -->
+      <div class="h-[46%] border-b border-slate-800 flex flex-row overflow-hidden bg-slate-900/10">
+        
+        <!-- Map Viz -->
+        <div class="w-[58%] border-r border-slate-800 flex flex-col relative">
+          <div class="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between">
+            <span class="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Live Attack Path Correlation Map</span>
+            <span class="text-[10px] font-mono text-cyan-500">TARGET: US-EAST-WEB</span>
+          </div>
+
+          <div class="flex-1 relative bg-slate-950/90 overflow-hidden flex items-center justify-center">
+            <svg class="w-full h-full max-h-[220px]" viewBox="0 0 1000 400" fill="none">
+              <!-- World Continent outlines -->
+              <path d="M150 180h30v20h-30zm220-40h50v30h-50zm320-10h60v40h-60zm110 120h40v40h-40z" fill="#1e293b" opacity="0.3" />
+              
+              <!-- USA Target Host -->
+              <circle cx="280" cy="180" r="16" fill="rgba(6, 182, 212, 0.1)" stroke="#06b6d4" stroke-width="1" stroke-dasharray="3,3" />
+              <circle cx="280" cy="180" r="4" fill="#06b6d4" />
+              <text x="240" y="210" fill="#06b6d4" font-size="10" font-family="monospace">TARGET: WEB-ALPHA</text>
+
+              <!-- Attacker Node: Moscow -->
+              <circle cx="680" cy="110" r="4" fill="#ef4444" class="animate-pulse" />
+              <text x="690" y="114" fill="#slate-400" font-size="9" font-family="monospace" class="fill-slate-400">RU_NODE (185.190.140.23)</text>
+              <path d="M680 110 Q 480 100 280 180" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" class="opacity-70" />
+
+              <!-- Attacker Node: Amsterdam -->
+              <circle cx="560" cy="120" r="4" fill="#f59e0b" class="animate-pulse" />
+              <text x="570" y="124" fill="#slate-400" font-size="9" font-family="monospace" class="fill-slate-400">NL_NODE (45.227.254.12)</text>
+              <path d="M560 120 Q 420 110 280 180" stroke="#f59e0b" stroke-width="1.5" class="opacity-70" />
+
+              <!-- Attacker Node: Taiwan -->
+              <circle cx="840" cy="220" r="4" fill="#ef4444" class="animate-pulse" />
+              <text x="810" y="240" fill="#slate-400" font-size="9" font-family="monospace" class="fill-slate-400">TW_C2 (193.56.29.44)</text>
+              <path d="M840 220 Q 560 260 280 180" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="2,2" class="opacity-70" />
+
+              <!-- Animated Telemetry curves -->
+              <circle cx="280" cy="180" r="3" fill="#ef4444">
+                <animateMotion dur="3s" repeatCount="indefinite" path="M680 110 Q 480 100 280 180" />
+              </circle>
+              <circle cx="280" cy="180" r="3" fill="#f59e0b">
+                <animateMotion dur="2.2s" repeatCount="indefinite" path="M560 120 Q 420 110 280 180" />
+              </circle>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Column failed authentication bar chart -->
+        <div class="flex-1 flex flex-col">
+          <div class="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between">
+            <span class="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Failed Authentication Ingress (1HR)</span>
+            <span class="text-[10px] font-mono text-red-400">SPIKE DETECTED</span>
+          </div>
+
+          <div class="flex-1 bg-slate-950/80 p-3 flex items-end justify-between relative overflow-hidden">
+            <!-- Grid Lines -->
+            <div class="absolute left-0 right-0 top-6 border-t border-slate-800/40 text-[8px] font-mono text-slate-600 pl-2">200 ATTEMPTS</div>
+            <div class="absolute left-0 right-0 top-16 border-t border-slate-800/40 text-[8px] font-mono text-slate-600 pl-2">100 ATTEMPTS</div>
+            
+            <!-- SVGs dynamic columns mapping -->
+            <template x-for="(val, idx) in chartData">
+              <div class="flex flex-col items-center flex-1 mx-1 z-10 group">
+                <div class="text-[8px] font-mono text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity mb-1" x-text="val"></div>
+                <div 
+                  :style="`height: ${(val / 250) * 100}px`" 
+                  :class="val > 150 ? 'bg-red-500' : val > 50 ? 'bg-amber-500' : 'bg-cyan-500/70'"
+                  class="w-full transition-all duration-500 rounded-t-sm"
+                ></div>
+                <span class="text-[8px] font-mono text-slate-600 mt-2" x-text="`:${15 + idx * 5}`"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Split Panel: Investigation Console -->
+      <div class="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
+        <div class="p-2 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between shrink-0">
+          <div class="flex items-center space-x-2">
+            <svg class="h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 12 13 18 7"/>
+              <polyline points="12 7 18 7 18 13"/>
+            </svg>
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-200 font-mono">Investigation Panel // Vigilance.ai</span>
+          </div>
+          <span class="text-[10px] font-mono text-slate-500 uppercase">Intel Agent Core</span>
+        </div>
+
+        <!-- Telemetry output block -->
+        <div id="consoleLog" class="flex-1 overflow-y-auto p-4 font-mono text-xs bg-slate-950/95 space-y-4 scanlines relative select-text">
+          
+          <div x-show="streamedResponse" class="whitespace-pre-wrap leading-relaxed text-slate-300">
+            <span x-text="streamedResponse"></span>
+            <span x-show="isStreaming" class="blinking-cursor"></span>
+          </div>
+
+          <div x-show="!streamedResponse" class="text-slate-500 flex flex-col items-center justify-center h-full space-y-2">
+            <svg class="h-8 w-8 text-slate-700 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+              <rect x="9" y="9" width="6" height="6"/>
+              <line x1="9" y1="1" x2="9" y2="4"/>
+              <line x1="15" y1="1" x2="15" y2="4"/>
+              <line x1="9" y1="20" x2="9" y2="23"/>
+              <line x1="15" y1="20" x2="15" y2="23"/>
+              <line x1="20" y1="9" x2="23" y2="9"/>
+              <line x1="20" y1="15" x2="23" y2="15"/>
+              <line x1="1" y1="9" x2="4" y2="9"/>
+              <line x1="1" y1="15" x2="4" y2="15"/>
+            </svg>
+            <p class="text-[11px]">COMMAND UTILITY AWAKENING ... INTERFACE STABLE</p>
+            <p class="text-[10px] text-slate-600 uppercase">Select an alert and hit Enter or click Run Playbook below</p>
+          </div>
+
+          <!-- Tool Execution text banner -->
+          <div x-show="toolExecutionState" class="flex items-center space-x-2 bg-slate-900 border border-slate-800 text-slate-300 p-2 rounded-sm max-w-sm animate-pulse">
+            <svg class="h-3 w-3 text-cyan-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-dasharray="80" stroke-dashoffset="10">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+            </svg>
+            <span class="text-[10px] font-mono text-slate-300 uppercase tracking-wider" x-text="toolExecutionState"></span>
+          </div>
+
+        </div>
+
+        <!-- Mitigation Feedback overlay badge -->
+        <div x-show="mitigationMessage" class="absolute bottom-16 right-4 bg-emerald-950/90 border border-emerald-500/40 text-emerald-400 text-xs px-3 py-2 rounded-sm font-mono flex items-center space-x-2 animate-bounce">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <span x-text="mitigationMessage"></span>
+        </div>
+
+        <!-- Command Line Console bar -->
+        <form @submit.prevent="runInvestigation()" class="h-10 border-y border-slate-800 bg-slate-950 flex items-center px-3 shrink-0">
+          <span class="text-cyan-400 font-mono text-xs mr-2 font-bold">$</span>
+          <input 
+            type="text" 
+            x-model="consoleInput"
+            class="flex-1 bg-transparent border-none outline-none text-slate-200 font-mono text-xs placeholder-slate-600 tracking-wide"
+            placeholder="/investigate [alert-ID]"
+          />
+          <button 
+            type="submit" 
+            :disabled="isStreaming"
+            class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-mono text-[10px] font-semibold px-3 py-1 rounded-sm border border-cyan-500/30 uppercase tracking-wider"
+            x-text="isStreaming ? 'Thinking...' : 'Execute'"
+          ></button>
+        </form>
+
+        <!-- Command control buttons below input bar -->
+        <div class="h-12 bg-slate-900/70 px-4 flex items-center justify-between shrink-0 overflow-x-auto space-x-2 border-t border-slate-900">
+          <div class="flex items-center space-x-2">
+            <button 
+              @click="runInvestigation()"
+              :disabled="isStreaming"
+              class="bg-cyan-600 hover:bg-cyan-700 text-slate-950 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm flex items-center space-x-1.5 transition-all"
+            >
+              <svg class="h-3 w-3 fill-slate-950" viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              <span>Run Playbook</span>
+            </button>
+            <button 
+              @click="triggerMitigation('Raw log fetch')"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-slate-700/60 flex items-center space-x-1.5"
+            >
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              <span>View Raw Logs</span>
+            </button>
+            <button 
+              @click="triggerMitigation('PDF report compiler')"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-slate-700/60 flex items-center space-x-1.5"
+            >
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>Generate Report</span>
+            </button>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <button 
+              @click="triggerMitigation(`Blocking IP ${selectedAlert.srcIp}`)"
+              class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-amber-500/30 flex items-center space-x-1.5"
+            >
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
+              <span>Block IP</span>
+            </button>
+            <button 
+              @click="triggerMitigation(`Isolating Host ${selectedAlert.destHost}`)"
+              class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-red-500/30 flex items-center space-x-1.5"
+            >
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <span>Isolate Host</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function socDashboard() {
+      return {
+        // Mock alerts database
+        alerts: [
+          { time: "18:29:45", id: "a105", srcIp: "45.227.254.12", destHost: "web-server-alpha", user: "admin", alertType: "SSH Brute Force", severity: "high", cveId: "CVE-2023-34992" },
+          { time: "18:28:10", id: "a104", srcIp: "185.190.140.23", destHost: "metabase-prod-01", user: "root", alertType: "RCE Injection Attempt", severity: "critical", cveId: "CVE-2023-38646" },
+          { time: "18:25:34", id: "a103", srcIp: "193.56.29.44", destHost: "ad-controller-01", user: "d_smith", alertType: "OS Credential Dumping", severity: "critical", cveId: "CVE-2021-44228" },
+          { time: "18:21:12", id: "a102", srcIp: "84.21.173.8", destHost: "billing-db-01", user: "postgres", alertType: "SQL Injection Probe", severity: "medium", cveId: "CVE-2023-23397" },
+          { time: "18:15:02", id: "a101", srcIp: "10.0.4.82", destHost: "internal-reporting", user: "system_cron", alertType: "Privilege Escalation", severity: "medium", cveId: "N/A" }
+        ],
+        chartData: [20, 35, 12, 10, 18, 55, 140, 195, 230, 185, 120, 95],
+        
+        selectedAlert: null,
+        consoleInput: '',
+        streamedResponse: '',
+        toolExecutionState: null,
+        isStreaming: false,
+        mitigationMessage: null,
+
+        init() {
+          this.selectedAlert = this.alerts[0];
+          this.consoleInput = `/investigate ${this.selectedAlert.id} --enrichment-details`;
+        },
+
+        selectAlert(alert) {
+          this.selectedAlert = alert;
+          this.consoleInput = `/investigate ${alert.id} --enrichment-details`;
+        },
+
+        triggerMitigation(action) {
+          this.mitigationMessage = `Executing ${action}... Complete! System state stabilized.`;
+          setTimeout(() => this.mitigationMessage = null, 4000);
+        },
+
+        async runInvestigation() {
+          if (this.isStreaming) return;
+          this.isStreaming = true;
+          this.streamedResponse = '';
+          
+          const alert = this.selectedAlert;
+          const steps = [
+            "Awaiting VirusTotal data for IP reputation...",
+            `Querying NVD Database for ${alert.cveId}...`,
+            "Querying local ChromaDB vector space for MITRE runbooks..."
+          ];
+
+          for (let step of steps) {
+            this.toolExecutionState = step;
+            await new Promise(r => setTimeout(r, 900));
+          }
+          
+          this.toolExecutionState = null;
+
+          const report = `--- Investigation Summary: [alert-ID: ${alert.id}] ---
+Target: [${alert.destHost}]
+User: [${alert.user}]
+Threat Vector: [${alert.alertType}]
+--- Intelligence Enrichment: [VirusTotal] ---
+Source IP ${alert.srcIp}: MALICIOUS (21/68)
+Category: Botnet/Credentials-Scanning
+AS Owner: Hostinger International Ltd.
+Country: NL
+--- [NVD] Related Vulnerability ---
+CVE Identifier: ${alert.cveId !== "N/A" ? alert.cveId : "CVE-2023-34992"}
+CVSS Base Score: 9.8 (CRITICAL)
+Vector String: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+CVE Description: Standard remote unauthenticated exploit parameters allow arbitrary remote command execution through system setup tokens.
+--- [ChromaDB] MITRE ATT&CK Alignment ---
+Aligned Tactic: Credential Access (T1110)
+Runbook Name: SSH Brute Force Remediation Playbook
+Confidence Score: 94.2%
+--- Response Recommendations ---
+Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation with VT. 3. Block malicious IP at firewall/WAF. 4. Force admin credential reset. 5. Enforce Multi-Factor Authentication.
+--- EOF Log Investigation ---`;
+
+          let i = 0;
+          const consoleLogDiv = document.getElementById('consoleLog');
+          while (i < report.length) {
+            const chunkSize = Math.min(15, report.length - i);
+            this.streamedResponse += report.substring(i, i + chunkSize);
+            i += chunkSize;
+            
+            // Auto scroll console
+            await new Promise(r => setTimeout(r, 20));
+            consoleLogDiv.scrollTop = consoleLogDiv.scrollHeight;
+          }
+
+          this.isStreaming = false;
+        }
+      }
+    }
+  </script>
+</body>
+</html>

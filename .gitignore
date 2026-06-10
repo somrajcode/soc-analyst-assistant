@@ -1,0 +1,24 @@
+# Common Git Ignore for SecOps Analyst Assistant
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+chromadb_data/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor / System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
