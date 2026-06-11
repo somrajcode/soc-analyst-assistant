@@ -1,6 +1,8 @@
 import io
 import uvicorn
 import jwt
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -14,6 +16,10 @@ from app.services.virustotal_service import lookup_ip, lookup_hash
 from app.services.nvd_service import lookup_cve
 from app.services.chromadb_service import search_runbooks
 from app.services.google_antigravity_sdk import LocalAgentConfig, AntigravityAgent
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Vigilance.ai - Autonomous AI SOC Analyst Backend",
@@ -128,11 +134,21 @@ def login(payload: LoginPayload):
 
 @app.post("/api/v1/analyze")
 async def analyze_alert(payload: AlertPayload, authorization: str = Depends(verify_auth_token)):
-    """POST endpoint to submit alert logs for autonomous enrichment and investigation."""
+    """POST endpoint to submit alert logs for autonomous enrichment and investigation with timeout protection."""
 
     async def event_generator():
-        async for chunk in soc_agent.run_deep_think_loop(payload.model_dump()):
-            yield chunk
+        try:
+            # Set a timeout of 25 seconds for the analysis task
+            async with asyncio.timeout(25):
+                async for chunk in soc_agent.run_deep_think_loop(payload.model_dump()):
+                    if chunk:
+                        yield chunk
+        except asyncio.TimeoutError:
+            logger.warning(f"Analysis timeout for alert {payload.alert_id}")
+            yield f"\n[Analysis timed out after 25 seconds - please try again or check backend logs]\n"
+        except Exception as e:
+            logger.error(f"Error analyzing alert {payload.alert_id}: {str(e)}")
+            yield f"\n[Error during analysis: {str(e)[:100]}]\n"
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 

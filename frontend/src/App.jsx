@@ -95,7 +95,18 @@ export default function App() {
   const [loginCompanyId, setLoginCompanyId] = useState("");
   const [authError, setAuthError] = useState("");
   const [activeUser, setActiveUser] = useState({ username: "", companyId: "" });
+  const [investigationTimeout, setInvestigationTimeout] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const consoleEndRef = useRef(null);
+
+  // Handle responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const session = window.localStorage.getItem("vigilance_session");
@@ -236,7 +247,14 @@ export default function App() {
     setMapTranslate({ x: 0, y: 0 });
   };
 
-  // Run autonomous analysis pipeline
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (investigationTimeout) clearTimeout(investigationTimeout);
+    };
+  }, [investigationTimeout]);
+
+  // Run autonomous analysis pipeline with timeout protection
   const handleRunInvestigation = async (e) => {
     if (e) e.preventDefault();
     if (isStreaming) return;
@@ -255,6 +273,16 @@ export default function App() {
       alert_type: selectedAlert.alertType
     };
 
+    // Create abort controller for timeout
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      setIsStreaming(false);
+      setToolExecutionState(null);
+      setStreamedResponse(prev => prev + "\n[Investigation timed out after 30s - running offline analysis]\n");
+      runLocalSimulation(payload).catch(() => {});
+    }, 30000);
+
     try {
       // Attempt backend API stream call
       const headers = { "Content-Type": "application/json" };
@@ -263,7 +291,8 @@ export default function App() {
       const response = await fetch(`${API_BASE_URL}/api/v1/analyze`, {
         method: "POST",
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: abortController.signal
       });
 
       if (!response.ok) {
@@ -277,7 +306,7 @@ export default function App() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        const text = decoder.decode(value);
+        const text = decoder.decode(value, { stream: true });
         
         // Parse tool execution messages
         const toolMatch = text.match(/:::tool_execution:(.*?):::/);
@@ -289,10 +318,14 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.warn("Backend unavailable. Running high-fidelity offline simulation loop...");
-      await runLocalSimulation(payload);
+      if (err.name !== 'AbortError') {
+        console.warn("Backend unavailable. Running high-fidelity offline simulation loop...");
+        await runLocalSimulation(payload);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsStreaming(false);
+      setToolExecutionState(null);
     }
   };
 
@@ -403,69 +436,70 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.18),transparent_18%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_22%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.96))]" />
 
-        <div className="relative mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-10">
-          <div className="grid w-full gap-8 lg:grid-cols-[760px_420px]">
-            <section className="glass-card rounded-[32px] border border-slate-700/40 p-10 shadow-2xl ring-1 ring-slate-800/60">
-              <div className="space-y-7">
-                <div className="inline-flex items-center gap-3 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs uppercase tracking-[0.32em] text-cyan-200">
+        <div className="relative mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 sm:px-6 py-6 sm:py-10">
+          <div className="grid w-full gap-6 sm:gap-8 grid-cols-1 md:grid-cols-[1fr_420px]">
+            <section className="glass-card rounded-3xl sm:rounded-[32px] border border-slate-700/40 p-6 sm:p-10 shadow-2xl ring-1 ring-slate-800/60">
+              <div className="space-y-5 sm:space-y-7">
+                <div className="inline-flex items-center gap-2 sm:gap-3 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs uppercase tracking-[0.2em] sm:tracking-[0.32em] text-cyan-200">
                   <Shield className="h-4 w-4 text-cyan-300" />
-                  Vigilance.ai
+                  <span className="hidden sm:inline">Vigilance.ai</span>
+                  <span className="sm:hidden">Vigilance</span>
                 </div>
 
-                <div className="space-y-4">
-                  <h1 className="text-5xl font-semibold tracking-tight text-slate-50">Vigilance.ai</h1>
-                  <p className="max-w-2xl text-slate-300 leading-8">AI enabled Human-Centric SOC Assistannt Dashboard</p>
+                <div className="space-y-3 sm:space-y-4">
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-slate-50">Vigilance.ai</h1>
+                  <p className="max-w-2xl text-sm sm:text-base text-slate-300 leading-6 sm:leading-8">AI-enabled Human-Centric SOC Assistant Dashboard</p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="glass-soft rounded-3xl border border-slate-700/40 p-5">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Region</p>
-                    <p className="mt-3 text-2xl font-semibold text-emerald-300">India</p>
+                <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2">
+                  <div className="glass-soft rounded-2xl sm:rounded-3xl border border-slate-700/40 p-4 sm:p-5">
+                    <p className="text-xs uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">Region</p>
+                    <p className="mt-2 sm:mt-3 text-xl sm:text-2xl font-semibold text-emerald-300">India</p>
                   </div>
-                  <div className="glass-soft rounded-3xl border border-slate-700/40 p-5">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mode</p>
-                    <p className="mt-3 text-2xl font-semibold text-cyan-300">Live Threat Ops</p>
+                  <div className="glass-soft rounded-2xl sm:rounded-3xl border border-slate-700/40 p-4 sm:p-5">
+                    <p className="text-xs uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">Mode</p>
+                    <p className="mt-2 sm:mt-3 text-xl sm:text-2xl font-semibold text-cyan-300">Live Threat Ops</p>
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="glass-card rounded-[32px] border border-cyan-500/15 p-8 shadow-2xl ring-1 ring-slate-800/60">
-              <div className="mb-8">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-cyan-300/80 font-semibold">Authentication</span>
-                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-50">Sign in to vigilance.ai</h2>
-                <p className="mt-3 text-slate-400 leading-7">Use your Company ID and password to open the SOC dashboard.</p>
+            <section className="glass-card rounded-3xl sm:rounded-[32px] border border-cyan-500/15 p-6 sm:p-8 shadow-2xl ring-1 ring-slate-800/60">
+              <div className="mb-6 sm:mb-8">
+                <span className="text-xs sm:text-[10px] uppercase tracking-[0.2em] sm:tracking-[0.3em] text-cyan-300/80 font-semibold">Authentication</span>
+                <h2 className="mt-3 sm:mt-4 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-50">Sign in to vigilance.ai</h2>
+                <p className="mt-2 sm:mt-3 text-sm sm:text-base text-slate-400 leading-6 sm:leading-7">Use your Company ID and password to open the SOC dashboard.</p>
               </div>
 
-              <form onSubmit={handleLoginSubmit} className="space-y-5">
+              <form onSubmit={handleLoginSubmit} className="space-y-4 sm:space-y-5">
                 <div className="space-y-2">
-                  <label className="text-slate-300 text-[11px] uppercase tracking-[0.2em] font-semibold">Company ID</label>
+                  <label className="text-slate-300 text-xs uppercase tracking-[0.2em] font-semibold">Company ID</label>
                   <input
                     type="text"
                     value={loginCompanyId}
                     onChange={(e) => setLoginCompanyId(e.target.value)}
-                    className="w-full rounded-[20px] border border-slate-800 bg-slate-950/90 px-4 py-3 text-slate-100 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+                    className="w-full rounded-2xl sm:rounded-[20px] border border-slate-800 bg-slate-950/90 px-3 sm:px-4 py-2.5 sm:py-3 text-slate-100 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                     placeholder="SOC-VPER28"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-slate-300 text-[11px] uppercase tracking-[0.2em] font-semibold">Password</label>
+                  <label className="text-slate-300 text-xs uppercase tracking-[0.2em] font-semibold">Password</label>
                   <input
                     type="password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full rounded-[20px] border border-slate-800 bg-slate-950/90 px-4 py-3 text-slate-100 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+                    className="w-full rounded-2xl sm:rounded-[20px] border border-slate-800 bg-slate-950/90 px-3 sm:px-4 py-2.5 sm:py-3 text-slate-100 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                     placeholder="••••••••"
                   />
                 </div>
 
-                {authError && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{authError}</div>}
+                {authError && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-red-300 leading-5 sm:leading-6">{authError}</div>}
 
                 <button
                   type="submit"
                   disabled={authLoading}
-                  className="w-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-950 transition hover:from-emerald-300 hover:to-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-xl"
+                  className="w-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-950 transition hover:from-emerald-300 hover:to-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-xl"
                 >
                   {authLoading ? "Signing in..." : "SIGN IN"}
                 </button>
@@ -483,36 +517,32 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(8,15,30,0.96))]" />
 
       {/* Top Header Bar */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-800/50 bg-slate-950/85 px-5 backdrop-blur-xl">
-        <div className="flex items-center space-x-3">
-          <div className="bg-cyan-500/10 border border-cyan-500/30 p-1.5 rounded-sm">
-            <Shield className="h-4 w-4 text-cyan-400" />
+      <header className="sticky top-0 z-30 flex flex-col sm:flex-row h-auto sm:h-16 items-start sm:items-center justify-between gap-2 sm:gap-0 border-b border-slate-800/50 bg-slate-950/85 px-3 sm:px-5 py-2 sm:py-0 backdrop-blur-xl">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="bg-cyan-500/10 border border-cyan-500/30 p-1 sm:p-1.5 rounded-sm">
+            <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-cyan-400" />
           </div>
           <div>
-            <span className="font-semibold tracking-wider text-sm text-slate-100 font-mono">VIGILANCE.AI</span>
-            <span className="text-[10px] text-slate-400 font-mono ml-2 border-l border-slate-700 pl-2">AUTONOMOUS SOC ENGINE</span>
+            <span className="font-semibold tracking-wider text-xs sm:text-sm text-slate-100 font-mono">VIGILANCE.AI</span>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono ml-1 sm:ml-2 border-l border-slate-700 pl-1 sm:pl-2 hidden sm:inline">AUTONOMOUS SOC ENGINE</span>
           </div>
         </div>
         
         {/* Core telemetry details */}
-        <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono text-slate-400">
-          <div className="flex items-center space-x-2">
-            <Radio className="h-3 w-3 text-emerald-400 animate-pulse" />
-            <span>AGENT: ACTIVE</span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-[9px] sm:text-[11px] font-mono text-slate-400 w-full sm:w-auto">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <Radio className="h-2 w-2 sm:h-3 sm:w-3 text-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">AGENT: ACTIVE</span>
+            <span className="sm:hidden">ACTIVE</span>
           </div>
-          <div>CWD: <span className="text-slate-200">C:\\soc-analyst-assistant</span></div>
-          <div>VER: <span className="text-slate-200">1.0.0-PRO</span></div>
-          <div className="flex items-center space-x-2">
-            <span className="text-slate-400">USER:</span>
-            <span className="text-slate-200 font-semibold">{activeUser.username || 'ANALYST'}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-slate-400">ORG:</span>
-            <span className="text-slate-200 font-semibold">{activeUser.companyId || 'SOC'}</span>
+          <div className="hidden md:block">VER: <span className="text-slate-200">1.0.0-PRO</span></div>
+          <div className="flex items-center space-x-1 text-[8px] sm:text-[11px]">
+            <span className="hidden sm:inline text-slate-400">USER:</span>
+            <span className="text-slate-200 font-semibold truncate">{activeUser.companyId || 'SOC'}</span>
           </div>
           <button
             onClick={handleLogout}
-            className="rounded-sm border border-slate-700 bg-slate-800 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-100 hover:bg-slate-700"
+            className="rounded-sm border border-slate-700 bg-slate-800 px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-[10px] uppercase tracking-[0.15em] text-slate-100 hover:bg-slate-700"
           >
             Logout
           </button>
@@ -520,30 +550,31 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
       </header>
 
       {/* Main Split Pane Layout */}
-      <main className="flex-1 flex overflow-hidden w-full relative">
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative">
         
         {/* Left Pane: Active Threat Feed */}
-        <section className="w-[38%] border-r border-slate-800 bg-slate-950/60 flex flex-col overflow-hidden shrink-0">
-          <div className="p-3 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-4 w-4 text-cyan-500" />
-              <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-200 font-mono">Active Threat Feed</h2>
+        <section className="w-full lg:w-[38%] h-auto lg:h-full border-b lg:border-r lg:border-b-0 border-slate-800 bg-slate-950/60 flex flex-col overflow-hidden shrink-0 max-h-[40vh] lg:max-h-none">
+          <div className="p-2 sm:p-3 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-cyan-500" />
+              <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-200 font-mono hidden sm:inline">Active Threat Feed</h2>
+              <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-200 font-mono sm:hidden">Alerts</h2>
             </div>
-            <span className="text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded-sm uppercase">Live Data Stream</span>
+            <span className="text-[8px] sm:text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded-sm uppercase">Live</span>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 text-[10px] uppercase font-mono text-slate-500 bg-slate-950">
-                  <th className="py-2 px-3">Time</th>
-                  <th className="py-2 px-3">Alert ID</th>
-                  <th className="py-2 px-3">Source IP</th>
-                  <th className="py-2 px-3">Alert Type</th>
-                  <th className="py-2 px-3 text-right">Status</th>
+                <tr className="border-b border-slate-800 text-[8px] sm:text-[10px] uppercase font-mono text-slate-500 bg-slate-950">
+                  <th className="py-2 px-2 sm:px-3">Time</th>
+                  <th className="py-2 px-2 sm:px-3 hidden sm:table-cell">Alert ID</th>
+                  <th className="py-2 px-2 sm:px-3 hidden md:table-cell">Source IP</th>
+                  <th className="py-2 px-2 sm:px-3">Type</th>
+                  <th className="py-2 px-2 sm:px-3 text-right">Sev</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/40 text-xs font-mono">
+              <tbody className="divide-y divide-slate-800/40 text-xs sm:text-sm font-mono">
                 {alerts.map((alert, idx) => {
                   const isSelected = selectedAlert.id === alert.id;
                   return (
@@ -556,19 +587,19 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
                           : 'hover:bg-slate-900/30 text-slate-300'
                       }`}
                     >
-                      <td className="py-3 px-3 text-slate-500 text-[11px]">{alert.time}</td>
-                      <td className="py-3 px-3 font-semibold">{alert.id}</td>
-                      <td className="py-3 px-3 font-mono tracking-tight">{alert.srcIp}</td>
-                      <td className="py-3 px-3 text-slate-100">{alert.alertType}</td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`inline-block text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm border ${
+                      <td className="py-2 px-2 sm:px-3 text-slate-500 text-[9px] sm:text-[11px]">{alert.time}</td>
+                      <td className="py-2 px-2 sm:px-3 font-semibold text-[8px] sm:text-sm hidden sm:table-cell">{alert.id}</td>
+                      <td className="py-2 px-2 sm:px-3 font-mono tracking-tight text-[8px] sm:text-sm hidden md:table-cell">{alert.srcIp}</td>
+                      <td className="py-2 px-2 sm:px-3 text-slate-100 text-[8px] sm:text-sm truncate">{alert.alertType.split(' ')[0]}</td>
+                      <td className="py-2 px-2 sm:px-3 text-right">
+                        <span className={`inline-block text-[7px] sm:text-[9px] uppercase tracking-wide px-1 sm:px-1.5 py-0.5 rounded-sm border ${
                           alert.severity === 'critical'
                             ? 'bg-red-950/40 border-red-500/30 text-red-400'
                             : alert.severity === 'high'
                             ? 'bg-amber-950/40 border-amber-500/30 text-amber-400'
                             : 'bg-cyan-950/40 border-cyan-500/30 text-cyan-400'
                         }`}>
-                          {alert.severity}
+                          {alert.severity.substring(0, 3).toUpperCase()}
                         </span>
                       </td>
 
@@ -590,31 +621,31 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
         <section className="flex-1 flex flex-col overflow-hidden bg-slate-950">
           
           {/* Top Panel: Workbench (Data Visualizations) */}
-          <div className="h-[46%] border-b border-slate-800 flex flex-row overflow-hidden bg-slate-900/10">
+          <div className="h-auto lg:h-[46%] border-b border-slate-800 flex flex-col lg:flex-row overflow-hidden bg-slate-900/10 max-h-[40vh] lg:max-h-none">
             
             {/* Map Viz */}
-            <div className="w-[58%] border-r border-slate-800 flex flex-col relative">
-              <div className="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Live Attack Path Correlation Map</span>
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
-                    <span className="rounded-full bg-slate-900/40 px-2 py-1 uppercase tracking-[0.25em]">India region</span>
-                    <span className="rounded-full bg-red-950/40 border border-red-500/30 px-2 py-1 text-red-300 uppercase tracking-[0.25em]">Vulnerable city detected</span>
+            <div className="w-full lg:w-[58%] border-b lg:border-b-0 lg:border-r border-slate-800 flex flex-col relative h-64 lg:h-auto">
+              <div className="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between gap-2 flex-wrap">
+                <div className="space-y-1 flex-1">
+                  <span className="text-[8px] sm:text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Live Attack Map</span>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[8px] sm:text-[10px] text-slate-400">
+                    <span className="rounded-full bg-slate-900/40 px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs uppercase tracking-[0.25em] hidden sm:inline">India region</span>
+                    <span className="rounded-full bg-red-950/40 border border-red-500/30 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs text-red-300 uppercase tracking-[0.25em]">Vulnerable</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono text-emerald-400">REGION: INDIA</span>
+                <span className="text-[8px] sm:text-[10px] font-mono text-emerald-400 whitespace-nowrap">INDIA</span>
               </div>
               
               {/* Premium Vector Path Map Representation */}
-              <div className="flex-1 relative bg-slate-950/90 overflow-hidden flex items-center justify-center">
+              <div className="flex-1 relative bg-slate-950/90 overflow-hidden flex items-center justify-center h-40 lg:h-auto">
                 <div
-                  className="w-full h-full max-h-[220px] touch-pan-y"
+                  className="w-full h-full touch-none"
                   onWheel={handleWheel}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+                  style={{ cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none' }}
                 >
                   <svg className="w-full h-full" viewBox="0 0 1000 400" fill="none">
                     <g transform={`translate(${mapTranslate.x} ${mapTranslate.y}) scale(${mapScale})`}>
@@ -664,89 +695,79 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
                   </div>
 
                   {/* Zoom controls overlay */}
-                  <div className="absolute right-3 top-3 flex flex-col space-y-2 z-30">
-                    <button onClick={() => zoom(0.15)} className="w-9 h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">+</button>
-                    <button onClick={() => zoom(-0.15)} className="w-9 h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">−</button>
-                    <button onClick={resetMap} className="w-9 h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">◻</button>
+                  <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col space-y-1.5 z-30 hidden sm:flex">
+                    <button onClick={() => zoom(0.15)} className="w-8 h-8 text-sm sm:w-9 sm:h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">+</button>
+                    <button onClick={() => zoom(-0.15)} className="w-8 h-8 text-sm sm:w-9 sm:h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">−</button>
+                    <button onClick={resetMap} className="w-8 h-8 text-sm sm:w-9 sm:h-9 rounded-sm bg-slate-800 border border-slate-700 text-slate-100">◻</button>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Time-Series Chart */}
-            <div className="flex-1 flex flex-col">
-              <div className="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between">
-                <span className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Failed Authentication Ingress (1HR)</span>
-                <span className="text-[10px] font-mono text-red-400">SPIKE DETECTED</span>
+            <div className="flex-1 flex flex-col w-full lg:w-auto">
+              <div className="p-2 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[8px] sm:text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Auth Ingress (1HR)</span>
+                <span className="text-[8px] sm:text-[10px] font-mono text-red-400 whitespace-nowrap">SPIKE</span>
               </div>
 
               {/* Time series bar chart */}
-              <div className="flex-1 bg-slate-950/80 p-3 relative overflow-hidden rounded-[20px] border border-slate-800/60">
+              <div className="flex-1 bg-slate-950/80 p-2 sm:p-3 relative overflow-hidden rounded-lg sm:rounded-[20px] border border-slate-800/60 h-40 lg:h-auto">
                 <div className="absolute inset-x-0 top-10 border-t border-slate-800/40" />
                 <div className="absolute inset-x-0 top-24 border-t border-slate-800/40" />
                 <div className="absolute inset-x-0 top-36 border-t border-slate-800/40" />
                 <div className="absolute inset-x-0 top-48 border-t border-slate-800/40" />
 
-                <div className="absolute left-3 top-8 text-[8px] font-mono text-slate-600">200 ATTEMPTS</div>
-                <div className="absolute left-3 top-22 text-[8px] font-mono text-slate-600">150 ATTEMPTS</div>
-                <div className="absolute left-3 top-34 text-[8px] font-mono text-slate-600">100 ATTEMPTS</div>
-                <div className="absolute left-3 top-46 text-[8px] font-mono text-slate-600">50 ATTEMPTS</div>
+                <div className="absolute left-2 sm:left-3 top-8 text-[6px] sm:text-[8px] font-mono text-slate-600 hidden sm:block">200</div>
+                <div className="absolute left-2 sm:left-3 top-22 text-[6px] sm:text-[8px] font-mono text-slate-600 hidden sm:block">150</div>
+                <div className="absolute left-2 sm:left-3 top-34 text-[6px] sm:text-[8px] font-mono text-slate-600 hidden sm:block">100</div>
+                <div className="absolute left-2 sm:left-3 top-46 text-[6px] sm:text-[8px] font-mono text-slate-600 hidden sm:block">50</div>
 
-                <div className="relative z-10 flex h-full items-end justify-between gap-1.5 px-1.5">
+                <div className="relative z-10 flex h-full items-end justify-between gap-0.5 sm:gap-1.5 px-1 sm:px-1.5">
                   {[30, 45, 22, 18, 28, 65, 150, 195, 240, 190, 130, 105].map((val, idx) => {
                     const percentHeight = Math.max(8, (val / 260) * 100);
                     return (
-                      <div key={idx} className="flex flex-col items-center flex-1">
-                        <div className="text-[8px] font-mono text-slate-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{val}</div>
+                      <div key={idx} className="flex flex-col items-center flex-1 min-w-0">
                         <div
                           style={{ height: `${percentHeight}%` }}
                           className={`w-full rounded-t-md transition-all duration-500 ${
                             val > 180 ? 'bg-red-500' : val > 120 ? 'bg-amber-500' : 'bg-cyan-500/70'
-                          }`
+                          }`}
                         />
-                        <span className="mt-2 text-[8px] font-mono text-slate-500">-{15 + idx * 5}</span>
                       </div>
                     );
                   })}
-                </div>
-
-                <div className="absolute inset-x-0 bottom-2 px-3 flex items-center justify-between text-[8px] font-mono text-slate-500">
-                  <span>-15</span>
-                  <span>-25</span>
-                  <span>-35</span>
-                  <span>-45</span>
-                  <span>-55</span>
-                  <span>-65</span>
-                  <span>-70</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Bottom Panel: Investigation Chat */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
-            <div className="p-2 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-2">
-                <Terminal className="h-4 w-4 text-cyan-400" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-200 font-mono">Investigation Panel // Vigilance.ai</span>
+          <div className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative min-h-[300px] lg:min-h-0">
+            <div className="sticky top-0 z-20 p-2 border-b border-slate-800 bg-slate-900/30 backdrop-blur-sm flex items-center justify-between gap-2 flex-wrap shrink-0">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <Terminal className="h-3 w-3 sm:h-4 sm:w-4 text-cyan-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-200 font-mono hidden sm:inline">Investigation Panel // Vigilance.ai</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-200 font-mono sm:hidden">Console</span>
               </div>
-              <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-500">
-                <span>INTEL AGENT CORE</span>
+              <div className="flex items-center space-x-1.5 sm:space-x-2 text-[8px] sm:text-[10px] font-mono text-slate-500">
+                <span className="hidden sm:inline">INTEL AGENT CORE</span>
+                <span className="sm:hidden">ACTIVE</span>
               </div>
             </div>
 
             {/* Response Console output */}
-            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs bg-slate-950/95 space-y-4 scanlines relative select-text">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-sm bg-slate-950/95 space-y-4 scanlines relative select-text text-slate-300 leading-relaxed">
               {streamedResponse ? (
-                <div className="whitespace-pre-wrap leading-relaxed text-slate-300">
+                <div className="whitespace-pre-wrap break-words text-xs sm:text-sm">
                   {streamedResponse}
                   {isStreaming && <span className="blinking-cursor"></span>}
                 </div>
               ) : (
                 <div className="text-slate-500 flex flex-col items-center justify-center h-full space-y-2">
-                  <Cpu className="h-8 w-8 text-slate-700 animate-pulse" />
-                  <p className="text-[11px]">COMMAND UTILITY AWAKENING ... INTERFACE STABLE</p>
-                  <p className="text-[10px] text-slate-600 uppercase">Select an alert and hit Enter or click Run Playbook below</p>
+                  <Cpu className="h-6 w-6 sm:h-8 sm:w-8 text-slate-700 animate-pulse" />
+                  <p className="text-[10px] sm:text-[11px] text-center">COMMAND UTILITY AWAKENING ... INTERFACE STABLE</p>
+                  <p className="text-[8px] sm:text-[10px] text-slate-600 uppercase text-center">Select an alert and press Enter or click Run</p>
                 </div>
               )}
 
@@ -754,7 +775,7 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
               {toolExecutionState && (
                 <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 text-slate-300 p-2 rounded-sm max-w-sm">
                   <RefreshCw className="h-3 w-3 text-cyan-400 animate-spin" />
-                  <span className="text-[10px] text-slate-300 font-mono uppercase tracking-wide">{toolExecutionState}</span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-300 font-mono uppercase tracking-wide break-words">{toolExecutionState}</span>
                 </div>
               )}
               
@@ -770,65 +791,68 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
             )}
 
             {/* Input Console Bar */}
-            <form onSubmit={handleRunInvestigation} className="h-10 border-y border-slate-800 bg-slate-950 flex items-center px-3 shrink-0">
-              <span className="text-cyan-400 font-mono text-xs mr-2 font-bold">$</span>
+            <form onSubmit={handleRunInvestigation} className="h-9 sm:h-10 border-y border-slate-800 bg-slate-950 flex items-center px-2 sm:px-3 shrink-0 gap-2">
+              <span className="text-cyan-400 font-mono text-xs mr-1 font-bold hidden sm:inline">$</span>
               <input 
                 type="text" 
                 value={consoleInput}
                 onChange={(e) => setConsoleInput(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-slate-200 font-mono text-xs placeholder-slate-600 tracking-wide"
-                placeholder="/investigate [alert-ID]"
+                className="flex-1 bg-transparent border-none outline-none text-slate-200 font-mono text-xs sm:text-sm placeholder-slate-600 tracking-wide min-w-0"
+                placeholder="/investigate [id]"
               />
               <button 
                 type="submit" 
                 disabled={isStreaming}
-                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-mono text-[10px] font-semibold px-3 py-1 rounded-sm border border-cyan-500/30 uppercase tracking-wider"
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-mono text-[9px] sm:text-[10px] font-semibold px-2 sm:px-3 py-1 rounded-sm border border-cyan-500/30 uppercase tracking-wider whitespace-nowrap"
               >
-                {isStreaming ? "Thinking..." : "Execute"}
+                {isStreaming ? "..." : "Run"}
               </button>
             </form>
 
             {/* Action Oriented buttons below console bar */}
-            <div className="h-12 bg-slate-900/70 px-4 flex items-center justify-between shrink-0 overflow-x-auto space-x-2 border-t border-slate-900">
-              <div className="flex items-center space-x-2">
+            <div className="h-auto sm:h-12 bg-slate-900/70 px-2 sm:px-4 py-2 sm:py-0 flex flex-wrap items-center justify-between sm:justify-start gap-2 shrink-0 overflow-x-auto border-t border-slate-900">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <button 
                   onClick={handleRunInvestigation}
                   disabled={isStreaming}
-                  className="bg-cyan-600 hover:bg-cyan-700 text-slate-950 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm flex items-center space-x-1.5 transition-all"
+                  className="bg-cyan-600 hover:bg-cyan-700 text-slate-950 text-[8px] sm:text-[10px] font-bold tracking-wider uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-sm flex items-center gap-1 sm:gap-1.5 transition-all whitespace-nowrap"
                 >
-                  <Play className="h-3 w-3 fill-slate-950" />
-                  <span>Run Playbook</span>
+                  <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-slate-950" />
+                  <span className="hidden sm:inline">Run Playbook</span>
+                  <span className="sm:hidden">Run</span>
                 </button>
                 <button 
                   onClick={() => handleMitigation("Raw log fetch")}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-slate-700/60 flex items-center space-x-1.5"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[8px] sm:text-[10px] font-semibold tracking-wider uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-sm border border-slate-700/60 flex items-center gap-1 sm:gap-1.5 hidden sm:flex whitespace-nowrap"
                 >
-                  <FileText className="h-3 w-3 text-slate-400" />
-                  <span>View Raw Logs</span>
+                  <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-slate-400" />
+                  <span>View Logs</span>
                 </button>
                 <button 
                   onClick={handleGenerateReport}
                   disabled={reportLoading}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-slate-700/60 flex items-center space-x-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[8px] sm:text-[10px] font-semibold tracking-wider uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-sm border border-slate-700/60 flex items-center gap-1 sm:gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  <AlertCircle className="h-3 w-3 text-slate-400" />
-                  <span>{reportLoading ? "Building PDF..." : "Generate Report"}</span>
+                  <AlertCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-slate-400" />
+                  <span className="hidden sm:inline">{reportLoading ? "Building PDF..." : "PDF Report"}</span>
+                  <span className="sm:hidden">PDF</span>
                 </button>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <button 
                   onClick={() => handleMitigation(`Blocking IP ${selectedAlert.srcIp}`)}
-                  className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-amber-500/30 flex items-center space-x-1.5"
+                  className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[8px] sm:text-[10px] font-bold tracking-wider uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-sm border border-amber-500/30 flex items-center gap-1 sm:gap-1.5 whitespace-nowrap"
                 >
-                  <Ban className="h-3 w-3" />
-                  <span>Block IP</span>
+                  <Ban className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="hidden sm:inline">Block IP</span>
+                  <span className="sm:hidden">Block</span>
                 </button>
                 <button 
                   onClick={() => handleMitigation(`Isolating Host ${selectedAlert.destHost}`)}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-sm border border-red-500/30 flex items-center space-x-1.5"
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[8px] sm:text-[10px] font-bold tracking-wider uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-sm border border-red-500/30 flex items-center gap-1 sm:gap-1.5 hidden sm:flex whitespace-nowrap"
                 >
-                  <Lock className="h-3 w-3" />
+                  <Lock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   <span>Isolate Host</span>
                 </button>
               </div>

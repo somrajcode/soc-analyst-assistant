@@ -5,18 +5,27 @@
 @layer base {
   /* Scrollbar Customization for Flat Security Monitor look */
   ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: #020617; /* slate-950 */
   }
   ::-webkit-scrollbar-thumb {
     background: #334155; /* slate-700 */
-    border-radius: 2px;
+    border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #475569;
+  }
+
+  /* Mobile-first responsive font sizing */
+  html {
+    font-size: clamp(12px, 2vw, 16px);
+  }
+
+  body, #root {
+    font-size: 1rem;
   }
 }
 
@@ -34,6 +43,14 @@
   h1, h2, h3, h4, h5, h6, .font-sans {
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   }
+
+  /* Responsive text sizing */
+  h1 { @apply text-2xl sm:text-3xl md:text-4xl lg:text-5xl; }
+  h2 { @apply text-xl sm:text-2xl md:text-3xl; }
+  h3 { @apply text-lg sm:text-xl md:text-2xl; }
+  
+  p { @apply text-sm sm:text-base; }
+  small { @apply text-xs sm:text-sm; }
 }
 
 /* Dedicated map label styling */
@@ -41,6 +58,7 @@
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   fill: #9ca3af;
   font-weight: 600;
+  font-size: clamp(10px, 1.5vw, 14px);
 }
 
 /* Custom Scanline Overlay for Console */
@@ -66,8 +84,8 @@
 }
 .blinking-cursor {
   display: inline-block;
-  width: 8px;
-  height: 15px;
+  width: clamp(6px, 1vw, 8px);
+  height: clamp(12px, 2vw, 15px);
   background-color: #06b6d4; /* cyberCyan */
   margin-left: 4px;
   animation: blink 1s step-end infinite;
@@ -96,8 +114,24 @@
   backdrop-filter: blur(18px);
 }
 
-.map-label {
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+/* Responsive container utilities */
+@layer components {
+  .responsive-table {
+    @apply text-xs sm:text-sm;
+  }
+  
+  .responsive-text-xs {
+    @apply text-[9px] sm:text-xs md:text-sm;
+  }
+  
+  .responsive-text-sm {
+    @apply text-xs sm:text-sm md:text-base;
+  }
+
+  .responsive-button {
+    @apply text-xs sm:text-sm px-2 sm:px-3 md:px-4 py-1.5 sm:py-2;
+  }
+}
   fill: #9ca3af;
   font-weight: 600;
 }
