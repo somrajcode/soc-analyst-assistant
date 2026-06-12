@@ -124,6 +124,8 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Commented out session restoration to ensure the login page always opens first
+  /*
   useEffect(() => {
     const session = window.localStorage.getItem("vigilance_session");
     if (session) {
@@ -139,6 +141,7 @@ export default function App() {
       }
     }
   }, []);
+  */
 
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
