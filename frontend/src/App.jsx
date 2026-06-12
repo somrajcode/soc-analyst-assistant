@@ -151,6 +151,13 @@ export default function App() {
     setAuthLoading(true);
     setAuthError("");
 
+    // Fallback static credentials for offline demo/Vercel compatibility
+    const OFFLINE_CREDENTIALS = {
+      "SOC-VPER28": "StringLA",
+      "SOC-VPER27": "StringBA",
+      "SOC": "Demo"
+    };
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/login`, {
         method: 'POST',
@@ -173,6 +180,33 @@ export default function App() {
       );
       setLoginPassword('');
     } catch (error) {
+      // Check if it's a connection/fetch error
+      const isFetchError = error.message && (
+        error.message.toLowerCase().includes("failed to fetch") || 
+        error.message.toLowerCase().includes("load failed") ||
+        error.message.toLowerCase().includes("networkerror")
+      );
+
+      if (isFetchError) {
+        const expectedPassword = OFFLINE_CREDENTIALS[loginCompanyId];
+        if (expectedPassword && loginPassword === expectedPassword) {
+          console.warn("Backend server offline. Logging in via client-side demo fallback.");
+          const mockToken = "mock-session-token-" + Date.now();
+          setActiveUser({ username: 'Analyst', companyId: loginCompanyId });
+          setAuthToken(mockToken);
+          setIsAuthenticated(true);
+          window.localStorage.setItem(
+            'vigilance_session',
+            JSON.stringify({ username: 'Analyst', company_id: loginCompanyId, token: mockToken })
+          );
+          setLoginPassword('');
+          return;
+        } else {
+          setAuthError("Invalid company ID or password (Offline Mode).");
+          return;
+        }
+      }
+
       setAuthError(error.message || 'Unable to authenticate.');
     } finally {
       setAuthLoading(false);
@@ -434,6 +468,27 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
       window.URL.revokeObjectURL(url);
       setReportMessage("PDF report generated and downloaded successfully.");
     } catch (error) {
+      const isFetchError = error.message && (
+        error.message.toLowerCase().includes("failed to fetch") || 
+        error.message.toLowerCase().includes("load failed") ||
+        error.message.toLowerCase().includes("networkerror")
+      );
+
+      if (isFetchError) {
+        console.warn("Backend offline. Generating text report client-side.");
+        const textContent = `VIGILANCE.AI - LOG ANALYSIS REPORT\n====================================\nAlert ID: ${reportPayload.alert_id}\nSource IP: ${reportPayload.src_ip}\nDestination Host: ${reportPayload.dest_host}\nUser: ${reportPayload.user}\nAlert Type: ${reportPayload.alert_type}\nCVE: ${reportPayload.cve_id}\n\nAnalysis Summary:\n-----------------\n${reportPayload.analysis_text}\n`;
+        const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `vigilance-report-${selectedAlert.id}.txt`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+        setReportMessage("Text report generated and downloaded successfully (Offline Fallback).");
+        return;
+      }
       setReportMessage(error.message || "PDF generation failed.");
     } finally {
       setReportLoading(false);
