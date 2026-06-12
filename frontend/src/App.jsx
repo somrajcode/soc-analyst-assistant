@@ -574,10 +574,11 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
                   type="submit"
                   disabled={authLoading}
                   className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-500 px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-950 transition hover:from-cyan-400 hover:to-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed shadow-[0_4px_20px_rgba(6,182,212,0.15)] transform active:scale-95 duration-150"
-                >
-                  {authLoading ? "Signing in..." : "SIGN IN"}
                 </button>
               </form>
+              <div className="mt-6 text-center text-[10px] text-slate-500 font-mono tracking-wider">
+                &copy; Somraj Laskar 2026
+              </div>
             </section>
           </div>
         </div>
@@ -610,6 +611,9 @@ Steps to Execute: 1. Extract source IP from logs. 2. Verify threat reputation wi
             <span className="sm:hidden">ACTIVE</span>
           </div>
           <div className="hidden md:block bg-slate-900/60 border border-slate-800/80 text-slate-400 px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wider">VER: <span className="text-slate-200">1.0.0-PRO</span></div>
+          <div className="hidden lg:block bg-slate-900/45 border border-slate-800/60 text-slate-500 px-2.5 py-1 rounded-full text-[9px] font-mono">
+            &copy; Somraj Laskar 2026
+          </div>
           <div className="flex items-center gap-1 bg-cyan-950/40 border border-cyan-500/25 text-cyan-400 px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wider">
             <span className="hidden sm:inline text-slate-500">USER:</span>
             <span className="text-cyan-300 font-semibold truncate">{activeUser.companyId || 'SOC'}</span>
